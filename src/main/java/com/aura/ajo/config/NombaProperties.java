@@ -26,6 +26,7 @@ public class NombaProperties {
         private String baseUrl;
         private String sandboxBaseUrl;
         private String accountId;
+        private String subAccountId;
         private String clientId;
         private String clientSecret;
     }
