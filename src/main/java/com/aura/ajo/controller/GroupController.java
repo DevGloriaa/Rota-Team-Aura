@@ -77,6 +77,11 @@ public class GroupController {
             .body(ApiResponse.ok("Group created", groupService.createGroup(request)));
     }
 
+    @GetMapping("/groups")
+    public ResponseEntity<ApiResponse<List<GroupResponse>>> listGroups() {
+        return ResponseEntity.ok(ApiResponse.ok(groupService.listGroups()));
+    }
+
     @GetMapping("/groups/{groupId}")
     public ResponseEntity<ApiResponse<GroupResponse>> getGroup(
             @PathVariable UUID groupId) {
