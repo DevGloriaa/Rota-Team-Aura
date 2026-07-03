@@ -19,6 +19,8 @@ public interface GroupService {
 
     GroupResponse createGroup(CreateGroupRequest request);
 
+    List<GroupResponse> listGroups();
+
     GroupResponse getGroup(UUID groupId);
 
     MemberResponse addMember(UUID groupId, AddMemberRequest request);
