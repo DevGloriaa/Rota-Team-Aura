@@ -25,7 +25,11 @@ public class SecurityConfig {
             "/api/v1/integrators/register",
             "/webhooks/nomba",
             "/api/v1/test/**",
-            "/health"
+            "/health",
+            "/swagger-ui.html",
+            "/swagger-ui/**",
+            "/api-docs",
+            "/api-docs/**"
     };
 
     @Bean
