@@ -5,16 +5,13 @@ import com.aura.ajo.dto.IntegratorResponse;
 import com.aura.ajo.entity.Integrator;
 import com.aura.ajo.repository.IntegratorRepository;
 import com.aura.ajo.service.IntegratorService;
+import com.aura.ajo.util.HashUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.HexFormat;
 
 @Service
 @RequiredArgsConstructor
@@ -31,7 +28,7 @@ public class IntegratorServiceImpl implements IntegratorService {
     @Transactional
     public IntegratorResponse register(CreateIntegratorRequest request) {
         String rawKey = generateRawKey();
-        String keyHash = sha256Hex(rawKey);
+        String keyHash = HashUtils.sha256Hex(rawKey);
 
         Integrator integrator = new Integrator();
         integrator.setName(request.getName());
@@ -60,13 +57,4 @@ public class IntegratorServiceImpl implements IntegratorService {
         return "rota_test_" + sb;
     }
 
-    static String sha256Hex(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
-    }
 }
