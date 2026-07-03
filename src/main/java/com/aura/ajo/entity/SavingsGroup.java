@@ -67,6 +67,9 @@ public class SavingsGroup {
     @Column(nullable = false)
     private boolean atRisk = false;
 
+    /** Owning integrator's id — stamped at creation, used to scope all operations. */
+    private UUID integratorId;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
