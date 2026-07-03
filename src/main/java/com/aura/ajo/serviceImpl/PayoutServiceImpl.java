@@ -16,6 +16,8 @@ import com.aura.ajo.service.TrustScoringService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,8 +90,7 @@ public class PayoutServiceImpl implements PayoutService {
     @Override
     @Transactional
     public void triggerPayoutForCycle(UUID groupId, int cycleNumber) {
-        SavingsGroup group = groupRepository.findById(groupId)
-                .orElseThrow(() -> AppException.notFound("Group", groupId));
+        SavingsGroup group = findGroupScoped(groupId);
 
         if (group.getStatus() != GroupStatus.ACTIVE) {
             throw AppException.badRequest("GROUP_NOT_ACTIVE",
@@ -124,8 +125,7 @@ public class PayoutServiceImpl implements PayoutService {
     @Override
     @Transactional(readOnly = true)
     public List<PayoutResponse> getPayoutHistory(UUID groupId) {
-        SavingsGroup group = groupRepository.findById(groupId)
-                .orElseThrow(() -> AppException.notFound("Group", groupId));
+        SavingsGroup group = findGroupScoped(groupId);
         return payoutRepository.findByGroupOrderByCycleNumberAsc(group)
                 .stream()
                 .map(this::toPayoutResponse)
@@ -313,6 +313,29 @@ public class PayoutServiceImpl implements PayoutService {
                 .sumByGroupIdAndType(group.getId(), LedgerEntryType.DEBIT)
                 .orElse(BigDecimal.ZERO);
         return credits.subtract(debits);
+    }
+
+    /**
+     * Loads a group scoped to the authenticated integrator when a security context is present,
+     * falling back to an unscoped lookup for internal paths (event listeners, period-end jobs)
+     * that run outside any HTTP request.
+     */
+    private SavingsGroup findGroupScoped(UUID groupId) {
+        UUID integratorId = currentIntegratorId();
+        if (integratorId != null) {
+            return groupRepository.findByIdAndIntegratorId(groupId, integratorId)
+                    .orElseThrow(() -> AppException.notFound("Group", groupId));
+        }
+        return groupRepository.findById(groupId)
+                .orElseThrow(() -> AppException.notFound("Group", groupId));
+    }
+
+    private static UUID currentIntegratorId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Integrator integrator) {
+            return integrator.getId();
+        }
+        return null;
     }
 
     private static void assertNombaSuccess(String code, String operation) {
