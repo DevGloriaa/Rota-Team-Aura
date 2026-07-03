@@ -199,7 +199,7 @@ public class GroupServiceImpl implements GroupService {
     }
 
     private VirtualAccount createMemberVirtualAccount(SavingsGroup group, Member member) {
-        String accountRef = "MBR-" + member.getId().toString().replace("-", "");
+        String accountRef = "MBR-" + UUID.randomUUID().toString().replace("-", "");
         String accountName = toNombaAccountName(member.getName());
 
         NombaCreateVirtualAccountRequest req = NombaCreateVirtualAccountRequest.builder()
@@ -230,7 +230,7 @@ public class GroupServiceImpl implements GroupService {
     }
 
     private VirtualAccount createGroupPoolVirtualAccount(SavingsGroup group) {
-        String accountRef = "POOL-" + group.getId().toString().replace("-", "");
+        String accountRef = "POOL-" + UUID.randomUUID().toString().replace("-", "");
         /*
          * Production hardening: per-group sub-account isolation (true custody separation) can be
          * enabled via the Nomba dashboard or Nomba's sub-account API. Not required for MVP.
