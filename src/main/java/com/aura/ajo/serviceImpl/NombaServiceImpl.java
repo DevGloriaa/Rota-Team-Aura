@@ -50,7 +50,7 @@ public class NombaServiceImpl implements NombaService {
     public NombaCreateVirtualAccountResponse createVirtualAccount(NombaCreateVirtualAccountRequest request) {
         try {
             NombaCreateVirtualAccountResponse resp = restClient.post()
-                    .uri("/v1/accounts/virtual")
+                    .uri("/v1/accounts/virtual/{subAccountId}", properties.getApi().getSubAccountId())
                     .header("Authorization", "Bearer " + getValidToken())
                     .header("accountId", properties.getApi().getAccountId())
                     .body(request)
@@ -113,7 +113,7 @@ public class NombaServiceImpl implements NombaService {
     public NombaBankTransferResponse performBankTransfer(NombaBankTransferRequest request) {
         try {
             NombaBankTransferResponse resp = restClient.post()
-                    .uri("/v2/transfers/bank")
+                    .uri("/v2/transfers/bank/{subAccountId}", properties.getApi().getSubAccountId())
                     .header("Authorization", "Bearer " + getValidToken())
                     .header("accountId", properties.getApi().getAccountId())
                     .body(request)
