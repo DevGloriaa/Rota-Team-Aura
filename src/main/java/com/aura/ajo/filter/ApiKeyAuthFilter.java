@@ -2,6 +2,7 @@ package com.aura.ajo.filter;
 
 import com.aura.ajo.entity.Integrator;
 import com.aura.ajo.repository.IntegratorRepository;
+import com.aura.ajo.util.HashUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,10 +11,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 
 @RequiredArgsConstructor
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
@@ -37,7 +34,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
 
         Integrator integrator = integratorRepository
-                .findByApiKeyHash(sha256Hex(rawKey))
+                .findByApiKeyHash(HashUtils.sha256Hex(rawKey))
                 .orElse(null);
 
         if (integrator == null) {
@@ -50,8 +47,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     }
 
     private static boolean isExempt(String method, String path) {
-        // Registration is open; Nomba webhooks are authenticated by HMAC signature, not API key
-        return ("POST".equalsIgnoreCase(method) && "/api/v1/integrators".equals(path))
+        // Registration is open; Nomba webhooks use HMAC signature auth, not API key
+        return ("POST".equalsIgnoreCase(method) && "/api/v1/integrators/register".equals(path))
                 || path.startsWith("/webhooks/");
     }
 
@@ -60,15 +57,5 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json");
         response.getWriter().write("{\"success\":false,\"message\":\"" + message + "\"}");
-    }
-
-    private static String sha256Hex(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
     }
 }
