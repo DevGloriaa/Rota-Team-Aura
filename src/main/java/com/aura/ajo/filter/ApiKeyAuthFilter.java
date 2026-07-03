@@ -64,8 +64,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private static boolean isExempt(String method, String path) {
         // Registration is open; Nomba webhooks use HMAC signature auth, not API key
+        // Swagger UI paths are public so judges can browse docs without a key
         return ("POST".equalsIgnoreCase(method) && "/api/v1/integrators/register".equals(path))
-                || path.startsWith("/webhooks/");
+                || path.startsWith("/webhooks/")
+                || path.equals("/swagger-ui.html")
+                || path.startsWith("/swagger-ui/")
+                || path.equals("/api-docs")
+                || path.startsWith("/api-docs/");
     }
 
     private static void sendUnauthorized(HttpServletResponse response, String message)
