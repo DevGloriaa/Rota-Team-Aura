@@ -92,7 +92,7 @@ public class NombaServiceImpl implements NombaService {
     public NombaBankResolveResponse resolveBankAccount(NombaBankResolveRequest request) {
         try {
             NombaBankResolveResponse resp = restClient.post()
-                    .uri("/v1/transfers/banks/resolve")
+                    .uri("/v1/transfers/bank/lookup")
                     .header("Authorization", "Bearer " + getValidToken())
                     .header("accountId", properties.getApi().getAccountId())
                     .body(request)
