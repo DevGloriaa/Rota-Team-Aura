@@ -23,6 +23,8 @@ import com.aura.ajo.service.NombaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,9 +61,22 @@ public class GroupServiceImpl implements GroupService {
         group.setFrequency(request.getFrequency());
         group.setCallbackUrl(request.getCallbackUrl());
         group.setStatus(GroupStatus.FORMING);
+        group.setIntegratorId(currentIntegratorId());
         group = groupRepository.save(group);
-        log.info("Created group {} ({})", group.getName(), group.getId());
+        log.info("Created group {} ({}) for integrator={}", group.getName(), group.getId(), group.getIntegratorId());
         return toGroupResponse(group);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupResponse> listGroups() {
+        UUID integratorId = currentIntegratorId();
+        if (integratorId == null) {
+            throw AppException.badRequest("AUTH_REQUIRED", "Authentication required to list groups");
+        }
+        return groupRepository.findByIntegratorIdOrderByCreatedAtDesc(integratorId).stream()
+                .map(this::toGroupResponse)
+                .toList();
     }
 
     @Override
@@ -576,8 +591,23 @@ public class GroupServiceImpl implements GroupService {
     }
 
     private SavingsGroup findGroupOrThrow(UUID groupId) {
+        UUID integratorId = currentIntegratorId();
+        if (integratorId != null) {
+            // Authenticated integrator path — scope to their own groups.
+            // Return 404 (not 403) so callers can't probe for other integrators' group IDs.
+            return groupRepository.findByIdAndIntegratorId(groupId, integratorId)
+                    .orElseThrow(() -> AppException.notFound("Group", groupId));
+        }
         return groupRepository.findById(groupId)
-            .orElseThrow(() -> AppException.notFound("Group", groupId));
+                .orElseThrow(() -> AppException.notFound("Group", groupId));
+    }
+
+    private static UUID currentIntegratorId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof Integrator integrator) {
+            return integrator.getId();
+        }
+        return null;
     }
 
     private static void assertNombaSuccess(String code, String operation) {
