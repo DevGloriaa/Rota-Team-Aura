@@ -43,7 +43,7 @@ public class WebhookServiceImpl implements WebhookService {
 
     @Override
     @Transactional(isolation = Isolation.REPEATABLE_READ)
-    public void handleNombaWebhook(String rawPayload, String signature) {
+    public void handleNombaWebhook(String rawPayload, String signature, String nombaTimestamp) {
 
         // ── 1. Parse payload ──────────────────────────────────────────────────
         // Parse first so we can build the Nomba signing string from the 9 documented
@@ -57,7 +57,7 @@ public class WebhookServiceImpl implements WebhookService {
         }
 
         // ── 2. Verify HMAC-SHA256 signature ──────────────────────────────────
-        if (!verifySignature(payload, signature)) {
+        if (!verifySignature(payload, signature, nombaTimestamp)) {
             throw new AppException("INVALID_WEBHOOK_SIGNATURE",
                     "Webhook signature verification failed — request rejected",
                     HttpStatus.UNAUTHORIZED);
@@ -92,8 +92,8 @@ public class WebhookServiceImpl implements WebhookService {
         }
 
         String transactionId = data.getTransaction().getTransactionId();
-        BigDecimal amount = data.getTransaction().getAmount();
-        String accountRef = data.getAliasAccountReference();
+        BigDecimal amount = data.getTransaction().getTransactionAmount();
+        String accountRef = data.getTransaction().getAliasAccountReference();
 
         if (transactionId == null || amount == null || accountRef == null) {
             throw AppException.badRequest("MALFORMED_WEBHOOK",
@@ -287,15 +287,19 @@ public class WebhookServiceImpl implements WebhookService {
     /**
      * Verifies the Nomba webhook signature per the Nomba signing scheme.
      *
-     * Nomba computes HMAC-SHA256 over a colon-joined string of nine specific payload fields
+     * Nomba computes HMAC-SHA256 over a colon-joined string of nine specific fields
      * (in a documented order), Base64-encodes the result, and sends it in the
      * "nomba-signature" header. See https://developer.nomba.com/docs/api-basics/webhook
+     *
+     * The 9th field is the "nomba-timestamp" HTTP header value, NOT any timestamp field
+     * inside the JSON payload body.
      *
      * The secret is required — startup fails with @NotBlank if unset. This runtime check
      * is defense-in-depth: if somehow reached with a blank secret, it throws rather than
      * silently passing every request.
      */
-    private boolean verifySignature(NombaWebhookPayload payload, String receivedSignature) {
+    private boolean verifySignature(NombaWebhookPayload payload, String receivedSignature,
+            String nombaTimestamp) {
         String secret = properties.getWebhook().getSecret();
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException(
@@ -318,7 +322,7 @@ public class WebhookServiceImpl implements WebhookService {
                 s(tx != null ? tx.getType() : null),
                 s(tx != null ? tx.getTime() : null),
                 s(tx != null ? tx.getResponseCode() : null),
-                s(payload.getTimestamp())
+                s(nombaTimestamp)
         );
 
         try {
