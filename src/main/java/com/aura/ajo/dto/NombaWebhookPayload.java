@@ -45,6 +45,7 @@ public class NombaWebhookPayload {
 
         /** accountRef we registered with Nomba at VA creation — our correlation key to Member. */
         private String aliasAccountReference;
+        private String aliasAccountNumber;
         private String aliasAccountName;
         private String aliasGroupId;
     }
@@ -65,7 +66,7 @@ public class NombaWebhookPayload {
         /** e.g. "API-VACT_TRA-B7B10-...". Used as LedgerEntry.transactionReference dedup key. */
         private String transactionId;
         private String type;
-        private BigDecimal amount;
+        private BigDecimal transactionAmount;
         private BigDecimal fee;
         private String time;
         private String responseCode;
