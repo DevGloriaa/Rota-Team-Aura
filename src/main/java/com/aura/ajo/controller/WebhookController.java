@@ -1,6 +1,8 @@
 package com.aura.ajo.controller;
 
 import com.aura.ajo.service.WebhookService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -26,10 +28,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/webhooks")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Webhooks")
 public class WebhookController {
 
     private final WebhookService webhookService;
 
+    @Operation(summary = "Nomba inbound payment webhook receiver")
     @PostMapping("/nomba")
     public ResponseEntity<Void> handleNomba(
             @RequestHeader(value = "nomba-signature", required = false) String signature,
