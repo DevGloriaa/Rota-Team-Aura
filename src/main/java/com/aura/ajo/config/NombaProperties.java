@@ -24,7 +24,6 @@ public class NombaProperties {
     @Setter
     public static class Api {
         private String baseUrl;
-        private String sandboxBaseUrl;
         private String accountId;
         private String subAccountId;
         private String clientId;
