@@ -28,6 +28,8 @@ public class NombaProperties {
         private String subAccountId;
         private String clientId;
         private String clientSecret;
+        /** Name of the sending party, reported to Nomba on outbound bank transfers. */
+        private String senderName;
     }
 
     @Getter
