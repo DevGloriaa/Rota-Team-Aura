@@ -36,6 +36,7 @@ public class WebhookServiceImpl implements WebhookService {
     private final VirtualAccountRepository virtualAccountRepository;
     private final ContributionRepository contributionRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final QuarantinedPaymentRepository quarantinedPaymentRepository;
     private final NombaProperties properties;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
@@ -100,11 +101,16 @@ public class WebhookServiceImpl implements WebhookService {
         }
 
         // ── 6. Resolve member via virtual account reference ───────────────────
-        VirtualAccount va = virtualAccountRepository.findByAccountRef(accountRef)
-                .orElseThrow(() -> {
-                    log.warn("No virtual account found for ref={}", accountRef);
-                    return AppException.notFound("VirtualAccount", accountRef);
-                });
+        // A payment that cannot be reconciled to an active PENDING contribution is quarantined
+        // rather than thrown/dropped: Nomba retries on non-2xx, so we always ack (200) once the
+        // event is durably recorded, whether credited or quarantined.
+        VirtualAccount va = virtualAccountRepository.findByAccountRef(accountRef).orElse(null);
+        if (va == null) {
+            log.warn("No virtual account found for ref={} — quarantining payment", accountRef);
+            quarantinePayment(null, accountRef, amount, transactionId, QuarantineReason.GROUP_NOT_FOUND);
+            persistWebhookEvent(requestId, payload.getEventType(), rawPayload, true);
+            return;
+        }
 
         if (va.getType() != VirtualAccountType.MEMBER) {
             // Payments to the pool's VA reference are unexpected; log and accept.
@@ -117,9 +123,18 @@ public class WebhookServiceImpl implements WebhookService {
         Member member = va.getMember();
         SavingsGroup group = va.getGroup();
 
-        if (group.getStatus() != GroupStatus.ACTIVE) {
-            throw AppException.badRequest("GROUP_NOT_ACTIVE",
-                    "Payment received for group " + group.getId() + " which is not ACTIVE");
+        if (group.getStatus() == GroupStatus.FORMING) {
+            log.warn("Payment received for group {} which has not been activated — quarantining", group.getId());
+            quarantinePayment(group, va.getBankAccountNumber(), amount, transactionId, QuarantineReason.NO_ACTIVE_CYCLE);
+            persistWebhookEvent(requestId, payload.getEventType(), rawPayload, true);
+            return;
+        }
+
+        if (group.getStatus() == GroupStatus.COMPLETED) {
+            log.warn("Payment received for group {} which has already completed — quarantining", group.getId());
+            quarantinePayment(group, va.getBankAccountNumber(), amount, transactionId, QuarantineReason.CYCLE_COMPLETED);
+            persistWebhookEvent(requestId, payload.getEventType(), rawPayload, true);
+            return;
         }
 
         // ── 7. Persist webhook event (idempotency anchor) ─────────────────────
@@ -138,24 +153,25 @@ public class WebhookServiceImpl implements WebhookService {
 
         // ── 9. Find or create the Contribution for this member/cycle ──────────
         int cycle = group.getCurrentCycle();
-        Contribution contribution = contributionRepository
+        Contribution existing = contributionRepository
                 .findByMemberAndGroupAndCycleNumber(member, group, cycle)
-                .orElseGet(() -> {
-                    Contribution c = new Contribution();
-                    c.setMember(member);
-                    c.setGroup(group);
-                    c.setCycleNumber(cycle);
-                    c.setAmountExpected(group.getContributionAmount());
-                    c.setStatus(ContributionStatus.PENDING);
-                    // Reconstruct fixed period dates from group.startDate (edge case: payment arrives
-                    // before eager contribution creation, e.g. race on group activation)
-                    if (group.getStartDate() != null) {
-                        int dpc = daysPerCycle(group.getFrequency());
-                        c.setPeriodStart(group.getStartDate().plusDays((long)(cycle - 1) * dpc));
-                        c.setPeriodEnd(group.getStartDate().plusDays((long) cycle * dpc));
-                    }
-                    return c;
-                });
+                .orElse(null);
+
+        boolean alreadyPaid = existing != null && existing.getStatus() == ContributionStatus.PAID;
+        BigDecimal expectedAmount = existing != null ? existing.getAmountExpected() : group.getContributionAmount();
+
+        // A second payment on top of an already-PAID contribution is allowed to differ (it's a
+        // pool top-up, see the HOLD rule below) — only PENDING/MISSED contributions must match.
+        if (!alreadyPaid && amount.compareTo(expectedAmount) != 0) {
+            log.warn("Amount mismatch for group={} member={} cycle={}: expected={} received={} — quarantining",
+                    group.getId(), member.getId(), cycle, expectedAmount, amount);
+            quarantinePayment(group, va.getBankAccountNumber(), amount, transactionId, QuarantineReason.AMOUNT_MISMATCH);
+            event.setProcessed(true);
+            webhookEventRepository.save(event);
+            return;
+        }
+
+        Contribution contribution = existing != null ? existing : newContribution(member, group, cycle);
 
         // ── 10. Advance Contribution status ───────────────────────────────────
         // Out-of-cycle rule (HOLD): if the contribution is already PAID, a second payment
@@ -223,6 +239,39 @@ public class WebhookServiceImpl implements WebhookService {
             case WEEKLY  -> 7;
             case MONTHLY -> 30;
         };
+    }
+
+    private Contribution newContribution(Member member, SavingsGroup group, int cycle) {
+        Contribution c = new Contribution();
+        c.setMember(member);
+        c.setGroup(group);
+        c.setCycleNumber(cycle);
+        c.setAmountExpected(group.getContributionAmount());
+        c.setStatus(ContributionStatus.PENDING);
+        // Reconstruct fixed period dates from group.startDate (edge case: payment arrives
+        // before eager contribution creation, e.g. race on group activation)
+        if (group.getStartDate() != null) {
+            int dpc = daysPerCycle(group.getFrequency());
+            c.setPeriodStart(group.getStartDate().plusDays((long) (cycle - 1) * dpc));
+            c.setPeriodEnd(group.getStartDate().plusDays((long) cycle * dpc));
+        }
+        return c;
+    }
+
+    /**
+     * Records a payment that cannot be reconciled to an active PENDING contribution.
+     * groupId/integratorId are null when the virtual account reference itself is unknown.
+     */
+    private void quarantinePayment(SavingsGroup group, String virtualAccountNumber, BigDecimal amount,
+                                    String transactionId, QuarantineReason reason) {
+        QuarantinedPayment payment = new QuarantinedPayment();
+        payment.setGroupId(group != null ? group.getId() : null);
+        payment.setIntegratorId(group != null ? group.getIntegratorId() : null);
+        payment.setVirtualAccountNumber(virtualAccountNumber);
+        payment.setAmount(amount);
+        payment.setNombaTransactionRef(transactionId);
+        payment.setReason(reason);
+        quarantinedPaymentRepository.save(payment);
     }
 
     private BigDecimal computePoolBalance(SavingsGroup group) {
