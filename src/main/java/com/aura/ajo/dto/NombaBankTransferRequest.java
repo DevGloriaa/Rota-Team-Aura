@@ -6,8 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-
 @Data
 @Builder
 @NoArgsConstructor
@@ -15,11 +13,16 @@ import java.math.BigDecimal;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class NombaBankTransferRequest {
 
-    private BigDecimal amount;
+    /** Nomba's live /v2/transfers/bank endpoint requires amount as a String, not a number. */
+    private String amount;
     /** Nigerian bank account number of the payout recipient. */
-    private String receiverAccountNumber;
+    private String accountNumber;
+    /** Name on the recipient's bank account. */
+    private String accountName;
     /** CBN bank code (e.g. "058" for GTBank). */
-    private String receiverBankCode;
+    private String bankCode;
+    /** Name of the party sending the transfer. */
+    private String senderName;
     private String narration;
     /** Deterministic idempotency key sent to Nomba: "PAYOUT-{groupId}-CYC-{n}". */
     private String merchantTxRef;
