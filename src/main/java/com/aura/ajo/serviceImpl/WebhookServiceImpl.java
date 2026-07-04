@@ -302,6 +302,7 @@ public class WebhookServiceImpl implements WebhookService {
                     "NOMBA_WEBHOOK_SECRET is not configured — set the NOMBA_WEBHOOK_SECRET " +
                     "environment variable before accepting webhooks.");
         }
+        String liveSecret = properties.getWebhook().getLiveSecret();
 
         NombaWebhookPayload.EventData data = payload.getData();
         NombaWebhookPayload.MerchantInfo merchant = data != null ? data.getMerchant() : null;
@@ -321,21 +322,27 @@ public class WebhookServiceImpl implements WebhookService {
         );
 
         try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(
-                    secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] hash = mac.doFinal(signingInput.getBytes(StandardCharsets.UTF_8));
-            String computed = Base64.getEncoder().encodeToString(hash);
-
-            // Constant-time comparison prevents timing attacks
-            return MessageDigest.isEqual(
-                    computed.getBytes(StandardCharsets.UTF_8),
-                    receivedSignature.getBytes(StandardCharsets.UTF_8));
-
+            boolean matchesSecret = matchesHmac(signingInput, secret, receivedSignature);
+            boolean matchesLiveSecret = liveSecret != null && !liveSecret.isBlank()
+                    && matchesHmac(signingInput, liveSecret, receivedSignature);
+            return matchesSecret || matchesLiveSecret;
         } catch (Exception e) {
             log.error("HMAC-SHA256 signature computation failed", e);
             return false;
         }
+    }
+
+    private static boolean matchesHmac(String signingInput, String secret, String receivedSignature)
+            throws java.security.NoSuchAlgorithmException, java.security.InvalidKeyException {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] hash = mac.doFinal(signingInput.getBytes(StandardCharsets.UTF_8));
+        String computed = Base64.getEncoder().encodeToString(hash);
+
+        // Constant-time comparison prevents timing attacks
+        return MessageDigest.isEqual(
+                computed.getBytes(StandardCharsets.UTF_8),
+                receivedSignature.getBytes(StandardCharsets.UTF_8));
     }
 
     private static String s(String value) {
