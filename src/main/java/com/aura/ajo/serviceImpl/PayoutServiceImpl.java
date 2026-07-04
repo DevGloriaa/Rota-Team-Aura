@@ -1,5 +1,6 @@
 package com.aura.ajo.serviceImpl;
 
+import com.aura.ajo.config.NombaProperties;
 import com.aura.ajo.dto.NombaBankTransferRequest;
 import com.aura.ajo.dto.NombaBankTransferResponse;
 import com.aura.ajo.dto.PayoutResponse;
@@ -41,6 +42,7 @@ public class PayoutServiceImpl implements PayoutService {
     private final LedgerEntryRepository ledgerEntryRepository;
     private final ContributionRepository contributionRepository;
     private final NombaService nombaService;
+    private final NombaProperties nombaProperties;
     private final TrustScoringService trustScoringService;
     private final NotificationService notificationService;
     private final PayoutFailureRecorder failureRecorder;
@@ -181,7 +183,8 @@ public class PayoutServiceImpl implements PayoutService {
                 .orElseThrow(() -> AppException.notFound(
                         "Member at rotation position " + cycleNumber + " in group", groupId));
 
-        if (recipient.getPayoutAccountNumber() == null || recipient.getPayoutBankCode() == null) {
+        if (recipient.getPayoutAccountNumber() == null || recipient.getPayoutBankCode() == null
+                || recipient.getPayoutAccountName() == null) {
             throw AppException.badRequest("MISSING_PAYOUT_DESTINATION",
                     "Recipient member " + recipient.getId() + " has no verified payout destination");
         }
@@ -214,9 +217,11 @@ public class PayoutServiceImpl implements PayoutService {
 
         // 5. Execute Nomba interbank transfer (net amount)
         NombaBankTransferRequest transferReq = NombaBankTransferRequest.builder()
-                .amount(netTransferAmount)
-                .receiverAccountNumber(recipient.getPayoutAccountNumber())
-                .receiverBankCode(recipient.getPayoutBankCode())
+                .amount(netTransferAmount.toPlainString())
+                .accountNumber(recipient.getPayoutAccountNumber())
+                .accountName(recipient.getPayoutAccountName())
+                .bankCode(recipient.getPayoutBankCode())
+                .senderName(nombaProperties.getApi().getSenderName())
                 .narration(group.getName() + " savings payout — cycle " + cycleNumber)
                 .merchantTxRef(merchantTxRef)
                 .build();
