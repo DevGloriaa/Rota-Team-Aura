@@ -17,7 +17,7 @@ import java.math.BigDecimal;
  *   data.transaction.transactionId   → LedgerEntry.transactionReference (dedup at ledger level)
  *
  * Key routing field:
- *   data.aliasAccountReference       → VirtualAccount.accountRef (member lookup)
+ *   data.transaction.aliasAccountReference → VirtualAccount.accountRef (member lookup)
  */
 @Data
 @NoArgsConstructor
@@ -43,10 +43,6 @@ public class NombaWebhookPayload {
         private TransactionInfo transaction;
         private CustomerInfo customer;
 
-        /** accountRef we registered with Nomba at VA creation — our correlation key to Member. */
-        private String aliasAccountReference;
-        private String aliasAccountNumber;
-        private String aliasAccountName;
         private String aliasGroupId;
     }
 
@@ -70,6 +66,11 @@ public class NombaWebhookPayload {
         private BigDecimal fee;
         private String time;
         private String responseCode;
+
+        /** accountRef we registered with Nomba at VA creation — our correlation key to Member. */
+        private String aliasAccountReference;
+        private String aliasAccountNumber;
+        private String aliasAccountName;
     }
 
     @Data
