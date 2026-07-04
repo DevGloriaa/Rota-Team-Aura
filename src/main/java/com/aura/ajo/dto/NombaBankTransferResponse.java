@@ -13,6 +13,7 @@ public class NombaBankTransferResponse {
 
     private String code;
     private String description;
+    private boolean status;
     private BankTransferData data;
 
     @Data
