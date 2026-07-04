@@ -240,7 +240,7 @@ public class GroupServiceImpl implements GroupService {
          * Production hardening: per-group sub-account isolation (true custody separation) can be
          * enabled via the Nomba dashboard or Nomba's sub-account API. Not required for MVP.
          */
-        String accountName = toNombaAccountName("POOL: " + group.getName());
+        String accountName = toNombaAccountName("POOL " + group.getName());
 
         NombaCreateVirtualAccountRequest req = NombaCreateVirtualAccountRequest.builder()
             .accountRef(accountRef)
