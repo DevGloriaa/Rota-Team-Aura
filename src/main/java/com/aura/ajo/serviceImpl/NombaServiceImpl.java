@@ -130,6 +130,21 @@ public class NombaServiceImpl implements NombaService {
         }
     }
 
+    @Override
+    public void expireVirtualAccount(String accountRef) {
+        try {
+            restClient.delete()
+                    .uri("/v1/accounts/virtual/{accountRef}", accountRef)
+                    .header("Authorization", "Bearer " + getValidToken())
+                    .header("accountId", properties.getApi().getAccountId())
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException e) {
+            throw new AppException("NOMBA_EXPIRE_VA_ERROR",
+                    "Nomba expireVirtualAccount HTTP error: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
+        }
+    }
+
     // ── Token management ──────────────────────────────────────────────────────
 
     private String getValidToken() {
