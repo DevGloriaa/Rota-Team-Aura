@@ -40,5 +40,13 @@ public class NombaProperties {
         @NotBlank(message = "nomba.webhook.secret must be set (env: NOMBA_WEBHOOK_SECRET) — " +
                             "signature verification requires a configured secret key")
         private String secret;
+
+        /**
+         * Live-environment HMAC signing secret from the Nomba dashboard.
+         * Set via NOMBA_LIVE_WEBHOOK_SECRET env var. Optional — when set, webhooks are
+         * accepted if they match either this or {@link #secret}, so sandbox and live
+         * webhooks can both be verified during the cutover period.
+         */
+        private String liveSecret;
     }
 }
