@@ -32,7 +32,10 @@ public interface ContributionRepository extends JpaRepository<Contribution, UUID
     /** Used by the detection job to find contributions due on an exact date (for notifications). */
     List<Contribution> findByStatusAndPeriodEnd(ContributionStatus status, LocalDate date);
 
-    /** Returns all non-PAID contributions for a group, ordered by period end ascending. */
-    List<Contribution> findByGroupAndStatusNotAndPeriodEndGreaterThanEqualOrderByPeriodEndAsc(
-            SavingsGroup group, ContributionStatus excludedStatus, LocalDate fromDate);
+    /** Returns all contributions in the given status for a group, ordered by period end ascending. */
+    List<Contribution> findByGroupAndStatusAndPeriodEndGreaterThanEqualOrderByPeriodEndAsc(
+            SavingsGroup group, ContributionStatus status, LocalDate fromDate);
+
+    /** Full cycle-by-cycle history for one member within a group — drives the member statement. */
+    List<Contribution> findByMemberAndGroupOrderByCycleNumberAsc(Member member, SavingsGroup group);
 }
