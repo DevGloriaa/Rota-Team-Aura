@@ -37,10 +37,12 @@ public class WebhookController {
     @PostMapping("/nomba")
     public ResponseEntity<Void> handleNomba(
             @RequestHeader(value = "nomba-signature", required = false) String signature,
+            @RequestHeader(value = "nomba-timestamp", required = false) String nombaTimestamp,
             @RequestBody String rawPayload) {
 
         log.debug("Received Nomba webhook ({} bytes)", rawPayload.length());
-        webhookService.handleNombaWebhook(rawPayload, signature != null ? signature : "");
+        webhookService.handleNombaWebhook(rawPayload, signature != null ? signature : "",
+                nombaTimestamp != null ? nombaTimestamp : "");
         return ResponseEntity.ok().build();
     }
 }
