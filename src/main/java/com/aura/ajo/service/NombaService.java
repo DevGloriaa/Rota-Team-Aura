@@ -42,4 +42,10 @@ public interface NombaService {
      * merchantTxRef in the request is Nomba's own idempotency key — prevents double-payout.
      */
     NombaBankTransferResponse performBankTransfer(NombaBankTransferRequest request);
+
+    /**
+     * DELETE /v1/accounts/virtual/{accountRef}
+     * Expires (deactivates) a previously created virtual account.
+     */
+    void expireVirtualAccount(String accountRef);
 }
