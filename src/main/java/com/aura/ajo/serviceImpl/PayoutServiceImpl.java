@@ -227,8 +227,12 @@ public class PayoutServiceImpl implements PayoutService {
                 .build();
 
         NombaBankTransferResponse transferResp = nombaService.performBankTransfer(transferReq);
-        assertNombaSuccess(transferResp.getCode(),
-                "performBankTransfer(group=" + groupId + ",cycle=" + cycleNumber + ")");
+        if (!"00".equals(transferResp.getCode()) && !transferResp.isStatus()) {
+            throw new AppException("NOMBA_ERROR",
+                    "Nomba returned non-success code " + transferResp.getCode() + " for: performBankTransfer(group="
+                            + groupId + ",cycle=" + cycleNumber + ")",
+                    HttpStatus.BAD_GATEWAY);
+        }
 
         String nombaTransactionId = transferResp.getData() != null
                 ? transferResp.getData().getId() : null;
