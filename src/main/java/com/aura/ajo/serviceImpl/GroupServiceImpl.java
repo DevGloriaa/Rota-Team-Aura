@@ -3,12 +3,15 @@ package com.aura.ajo.serviceImpl;
 import com.aura.ajo.dto.AddMemberRequest;
 import com.aura.ajo.dto.CreateGroupRequest;
 import com.aura.ajo.dto.GroupHealthResponse;
+import com.aura.ajo.dto.GroupReportResponse;
 import com.aura.ajo.dto.GroupResponse;
 import com.aura.ajo.dto.MemberResponse;
+import com.aura.ajo.dto.MemberStatementResponse;
 import com.aura.ajo.dto.NombaBankResolveRequest;
 import com.aura.ajo.dto.NombaBankResolveResponse;
 import com.aura.ajo.dto.NombaCreateVirtualAccountRequest;
 import com.aura.ajo.dto.NombaCreateVirtualAccountResponse;
+import com.aura.ajo.dto.PayoutResponse;
 import com.aura.ajo.dto.ProvisionResponse;
 import com.aura.ajo.dto.RotationEntry;
 import com.aura.ajo.dto.SimulateContributionRequest;
@@ -20,6 +23,7 @@ import com.aura.ajo.exception.AppException;
 import com.aura.ajo.repository.*;
 import com.aura.ajo.service.GroupService;
 import com.aura.ajo.service.NombaService;
+import com.aura.ajo.service.PayoutService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -47,6 +51,7 @@ public class GroupServiceImpl implements GroupService {
     private final WebhookEventRepository webhookEventRepository;
     private final ContributionRepository contributionRepository;
     private final NombaService nombaService;
+    private final PayoutService payoutService;
 
     // -------------------------------------------------------------------------
     // Group lifecycle
@@ -554,8 +559,8 @@ public class GroupServiceImpl implements GroupService {
         LocalDate today = LocalDate.now();
 
         List<UpcomingDueResponse.DueEntry> entries = contributionRepository
-            .findByGroupAndStatusNotAndPeriodEndGreaterThanEqualOrderByPeriodEndAsc(
-                    group, ContributionStatus.PAID, today)
+            .findByGroupAndStatusAndPeriodEndGreaterThanEqualOrderByPeriodEndAsc(
+                    group, ContributionStatus.PENDING, today)
             .stream()
             .map(c -> UpcomingDueResponse.DueEntry.builder()
                     .memberId(c.getMember().getId())
@@ -576,6 +581,103 @@ public class GroupServiceImpl implements GroupService {
                 .asOfDate(today)
                 .upcomingDues(entries)
                 .build();
+    }
+
+    // ── Member statement ──────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public MemberStatementResponse getMemberStatement(UUID groupId, UUID memberId) {
+        SavingsGroup group = findGroupOrThrow(groupId);
+        Member member = memberRepository.findById(memberId)
+            .filter(m -> m.getGroup().getId().equals(group.getId()))
+            .orElseThrow(() -> AppException.notFound("Member", memberId));
+
+        List<Contribution> contributions = contributionRepository
+            .findByMemberAndGroupOrderByCycleNumberAsc(member, group);
+
+        BigDecimal totalExpected = contributions.stream()
+            .map(Contribution::getAmountExpected)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalPaid = contributions.stream()
+            .filter(c -> c.getStatus() == ContributionStatus.PAID)
+            .map(c -> c.getAmountReceived() != null ? c.getAmountReceived() : BigDecimal.ZERO)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        List<MemberStatementResponse.ContributionEntry> entries = contributions.stream()
+            .map(c -> MemberStatementResponse.ContributionEntry.builder()
+                .cycleNumber(c.getCycleNumber())
+                .amountExpected(c.getAmountExpected())
+                .amountReceived(c.getAmountReceived())
+                .status(c.getStatus().name())
+                .paidAt(c.getPaidAt())
+                .periodStart(c.getPeriodStart())
+                .periodEnd(c.getPeriodEnd())
+                .build())
+            .toList();
+
+        return MemberStatementResponse.builder()
+            .groupId(group.getId())
+            .memberId(member.getId())
+            .memberName(member.getName())
+            .rotationPosition(member.getRotationPosition())
+            .hasCollected(member.isHasCollected())
+            .trustScore(member.getTrustScore())
+            .owedAmount(member.getOwedAmount())
+            .totalExpected(totalExpected)
+            .totalPaid(totalPaid)
+            .contributions(entries)
+            .build();
+    }
+
+    // ── Group report ──────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public GroupReportResponse getGroupReport(UUID groupId) {
+        SavingsGroup group = findGroupOrThrow(groupId);
+
+        List<Member> members = group.isRotationLocked()
+            ? memberRepository.findByGroupOrderByRotationPositionAsc(group)
+            : memberRepository.findByGroupOrderByCreatedAtAsc(group);
+
+        Map<UUID, Contribution> contribByMember = contributionRepository
+            .findByGroupAndCycleNumber(group, group.getCurrentCycle()).stream()
+            .collect(Collectors.toMap(c -> c.getMember().getId(), c -> c));
+
+        List<GroupReportResponse.MemberFundingEntry> currentCycleFunding = members.stream()
+            .map(m -> {
+                Contribution c = contribByMember.get(m.getId());
+                return GroupReportResponse.MemberFundingEntry.builder()
+                    .memberId(m.getId())
+                    .memberName(m.getName())
+                    .status(c != null ? c.getStatus().name() : "NO_RECORD")
+                    .amount(c != null ? c.getAmountExpected() : group.getContributionAmount())
+                    .build();
+            })
+            .toList();
+
+        Member nextRecipient = (group.isRotationLocked() && group.getStatus() == GroupStatus.ACTIVE)
+            ? memberRepository.findByGroupAndRotationPosition(group, group.getCurrentCycle())
+                              .orElse(null)
+            : null;
+
+        List<PayoutResponse> payoutHistory = payoutService.getPayoutHistory(groupId);
+        List<RotationEntry> rotationOrder = group.isRotationLocked() ? getRotation(groupId) : List.of();
+
+        return GroupReportResponse.builder()
+            .groupId(group.getId())
+            .groupName(group.getName())
+            .status(group.getStatus().name())
+            .currentCycle(group.getCurrentCycle())
+            .totalCycles(group.getTotalCycles())
+            .poolBalance(computePoolBalance(group))
+            .currentCycleFunding(currentCycleFunding)
+            .payoutHistory(payoutHistory)
+            .rotationOrder(rotationOrder)
+            .nextToCollectMemberId(nextRecipient != null ? nextRecipient.getId() : null)
+            .nextToCollectMemberName(nextRecipient != null ? nextRecipient.getName() : null)
+            .build();
     }
 
     // -------------------------------------------------------------------------
