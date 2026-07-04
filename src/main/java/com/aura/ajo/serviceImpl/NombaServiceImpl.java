@@ -37,9 +37,9 @@ public class NombaServiceImpl implements NombaService {
 
     public NombaServiceImpl(NombaProperties properties) {
         this.properties = properties;
-        String baseUrl = properties.getApi().getSandboxBaseUrl();
+        String baseUrl = properties.getApi().getBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalStateException("nomba.api.sandbox-base-url must be configured");
+            throw new IllegalStateException("nomba.api.base-url must be configured");
         }
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
@@ -161,7 +161,7 @@ public class NombaServiceImpl implements NombaService {
     }
 
     private void obtainToken() {
-        log.info("Requesting Nomba sandbox access token");
+        log.info("Requesting Nomba access token");
         NombaTokenRequest req = NombaTokenRequest.builder()
                 .grantType("client_credentials")
                 .clientId(properties.getApi().getClientId())
