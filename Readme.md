@@ -112,7 +112,7 @@ curl -X POST https://your-rota-url/api/v1/groups/{groupId}/activate \
 
 Live interactive docs (try endpoints directly):
 ```
-https://your-rota-url/swagger-ui.html
+https://barrable-jesica-judgmental.ngrok-free.dev/swagger-ui.html
 ```
 
 | Method | Endpoint | Description |
@@ -147,7 +147,7 @@ All endpoints except `/api/v1/integrators/register` and `/webhooks/nomba` requir
 
 **1. Clone and configure:**
 ```bash
-git clone https://github.com/your-repo/rota.git
+git clone https://github.com/DevGloriaa/Rota-Team-Aura
 cd rota
 ```
 
