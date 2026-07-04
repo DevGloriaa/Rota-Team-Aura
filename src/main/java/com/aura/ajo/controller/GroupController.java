@@ -4,8 +4,10 @@ import com.aura.ajo.dto.AddMemberRequest;
 import com.aura.ajo.dto.ApiResponse;
 import com.aura.ajo.dto.CreateGroupRequest;
 import com.aura.ajo.dto.GroupHealthResponse;
+import com.aura.ajo.dto.GroupReportResponse;
 import com.aura.ajo.dto.GroupResponse;
 import com.aura.ajo.dto.MemberResponse;
+import com.aura.ajo.dto.MemberStatementResponse;
 import com.aura.ajo.dto.PayoutResponse;
 import com.aura.ajo.dto.ProvisionResponse;
 import com.aura.ajo.dto.RotationEntry;
@@ -14,6 +16,8 @@ import com.aura.ajo.dto.UpcomingDueResponse;
 import com.aura.ajo.service.GroupService;
 import com.aura.ajo.service.PayoutService;
 import com.aura.ajo.service.TrustScoringService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -62,6 +66,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
+@Tag(name = "Groups")
 public class GroupController {
 
     private final GroupService groupService;
@@ -70,6 +75,7 @@ public class GroupController {
 
     // ── Groups ────────────────────────────────────────────────────────────────
 
+    @Operation(summary = "Create a savings group")
     @PostMapping("/groups")
     public ResponseEntity<ApiResponse<GroupResponse>> createGroup(
             @Valid @RequestBody CreateGroupRequest request) {
@@ -77,11 +83,13 @@ public class GroupController {
             .body(ApiResponse.ok("Group created", groupService.createGroup(request)));
     }
 
+    @Operation(summary = "List your groups")
     @GetMapping("/groups")
     public ResponseEntity<ApiResponse<List<GroupResponse>>> listGroups() {
         return ResponseEntity.ok(ApiResponse.ok(groupService.listGroups()));
     }
 
+    @Operation(summary = "Get group details")
     @GetMapping("/groups/{groupId}")
     public ResponseEntity<ApiResponse<GroupResponse>> getGroup(
             @PathVariable UUID groupId) {
@@ -90,6 +98,7 @@ public class GroupController {
 
     // ── Members ───────────────────────────────────────────────────────────────
 
+    @Operation(summary = "Add a member to a group")
     @PostMapping("/groups/{groupId}/members")
     public ResponseEntity<ApiResponse<MemberResponse>> addMember(
             @PathVariable UUID groupId,
@@ -98,6 +107,7 @@ public class GroupController {
             .body(ApiResponse.ok("Member added", groupService.addMember(groupId, request)));
     }
 
+    @Operation(summary = "List members in a group")
     @GetMapping("/groups/{groupId}/members")
     public ResponseEntity<ApiResponse<List<MemberResponse>>> getMembers(
             @PathVariable UUID groupId) {
@@ -106,6 +116,7 @@ public class GroupController {
 
     // ── Provisioning ──────────────────────────────────────────────────────────
 
+    @Operation(summary = "Provision Nomba virtual accounts for all members")
     @PostMapping("/groups/{groupId}/provision")
     public ResponseEntity<ApiResponse<ProvisionResponse>> provision(
             @PathVariable UUID groupId) {
@@ -115,6 +126,7 @@ public class GroupController {
 
     // ── Activation ────────────────────────────────────────────────────────────
 
+    @Operation(summary = "Activate group and lock rotation")
     @PostMapping("/groups/{groupId}/activate")
     public ResponseEntity<ApiResponse<GroupResponse>> activate(
             @PathVariable UUID groupId) {
@@ -122,6 +134,7 @@ public class GroupController {
             ApiResponse.ok("Group activated and rotation locked", groupService.activateGroup(groupId)));
     }
 
+    @Operation(summary = "Get the locked rotation order")
     @GetMapping("/groups/{groupId}/rotation")
     public ResponseEntity<ApiResponse<List<RotationEntry>>> getRotation(
             @PathVariable UUID groupId) {
@@ -130,6 +143,7 @@ public class GroupController {
 
     // ── Ledger ────────────────────────────────────────────────────────────────
 
+    @Operation(summary = "Get pool balance for a group")
     @GetMapping("/groups/{groupId}/balance")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getPoolBalance(
             @PathVariable UUID groupId) {
@@ -148,6 +162,7 @@ public class GroupController {
      *
      *   curl -s localhost:8080/api/v1/groups/{groupId}/payouts
      */
+    @Operation(summary = "List payout history for a group")
     @GetMapping("/groups/{groupId}/payouts")
     public ResponseEntity<ApiResponse<List<PayoutResponse>>> getPayouts(
             @PathVariable UUID groupId) {
@@ -161,6 +176,7 @@ public class GroupController {
      *
      *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/cycles/1/trigger-payout
      */
+    @Operation(summary = "Manually trigger payout for a cycle")
     @PostMapping("/groups/{groupId}/cycles/{cycleNumber}/trigger-payout")
     public ResponseEntity<ApiResponse<Map<String, Object>>> triggerPayout(
             @PathVariable UUID groupId,
@@ -182,10 +198,40 @@ public class GroupController {
      *
      *   curl -s localhost:8080/api/v1/groups/{groupId}/upcoming-dues
      */
+    @Operation(summary = "Get upcoming contribution deadlines")
     @GetMapping("/groups/{groupId}/upcoming-dues")
     public ResponseEntity<ApiResponse<UpcomingDueResponse>> getUpcomingDues(
             @PathVariable UUID groupId) {
         return ResponseEntity.ok(ApiResponse.ok(groupService.getUpcomingDues(groupId)));
+    }
+
+    // ── Statement + reporting ─────────────────────────────────────────────────
+
+    /**
+     * Full contribution history and standing for one member: every cycle's expected vs
+     * received amount and status, rotation position, hasCollected, trustScore, owedAmount.
+     *
+     *   curl -s localhost:8080/api/v1/groups/{groupId}/members/{memberId}/statement
+     */
+    @Operation(summary = "Get a member's contribution statement")
+    @GetMapping("/groups/{groupId}/members/{memberId}/statement")
+    public ResponseEntity<ApiResponse<MemberStatementResponse>> getMemberStatement(
+            @PathVariable UUID groupId,
+            @PathVariable UUID memberId) {
+        return ResponseEntity.ok(ApiResponse.ok(groupService.getMemberStatement(groupId, memberId)));
+    }
+
+    /**
+     * Group-level report: status, current cycle, pool balance, per-member funding status
+     * for the current cycle, full payout history, and rotation order (who collects next).
+     *
+     *   curl -s localhost:8080/api/v1/groups/{groupId}/report
+     */
+    @Operation(summary = "Get group funding status and payout history")
+    @GetMapping("/groups/{groupId}/report")
+    public ResponseEntity<ApiResponse<GroupReportResponse>> getGroupReport(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(ApiResponse.ok(groupService.getGroupReport(groupId)));
     }
 
     // ── Phase 4: Health + Trust score ─────────────────────────────────────────
@@ -196,6 +242,7 @@ public class GroupController {
      *
      *   curl -s localhost:8080/api/v1/groups/{groupId}/health
      */
+    @Operation(summary = "Get group health dashboard")
     @GetMapping("/groups/{groupId}/health")
     public ResponseEntity<ApiResponse<GroupHealthResponse>> getHealth(
             @PathVariable UUID groupId) {
@@ -208,6 +255,7 @@ public class GroupController {
      *
      *   curl -s localhost:8080/api/v1/members/{memberId}/trust-score
      */
+    @Operation(summary = "Get a member's trust score breakdown")
     @GetMapping("/members/{memberId}/trust-score")
     public ResponseEntity<ApiResponse<TrustScoreBreakdown>> getTrustScore(
             @PathVariable UUID memberId) {
