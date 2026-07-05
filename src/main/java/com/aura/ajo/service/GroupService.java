@@ -2,15 +2,19 @@ package com.aura.ajo.service;
 
 import com.aura.ajo.dto.AddMemberRequest;
 import com.aura.ajo.dto.CreateGroupRequest;
+import com.aura.ajo.dto.GroupClosureResponse;
 import com.aura.ajo.dto.GroupHealthResponse;
 import com.aura.ajo.dto.GroupReportResponse;
 import com.aura.ajo.dto.GroupResponse;
+import com.aura.ajo.dto.KycUpdateResponse;
 import com.aura.ajo.dto.MemberResponse;
 import com.aura.ajo.dto.MemberStatementResponse;
 import com.aura.ajo.dto.ProvisionResponse;
 import com.aura.ajo.dto.RotationEntry;
 import com.aura.ajo.dto.SimulateContributionRequest;
 import com.aura.ajo.dto.UpcomingDueResponse;
+import com.aura.ajo.dto.UpdateKycRequest;
+import com.aura.ajo.dto.UpdateMemberRequest;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -46,4 +50,10 @@ public interface GroupService {
     MemberStatementResponse getMemberStatement(UUID groupId, UUID memberId);
 
     GroupReportResponse getGroupReport(UUID groupId);
+
+    MemberResponse updateMember(UUID groupId, UUID memberId, UpdateMemberRequest request);
+
+    GroupClosureResponse closeGroup(UUID groupId);
+
+    KycUpdateResponse updateMemberKyc(UUID groupId, UUID memberId, UpdateKycRequest request);
 }
