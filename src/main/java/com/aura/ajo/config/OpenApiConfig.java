@@ -6,8 +6,11 @@ import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.tags.Tag;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
 
 @Configuration
 public class OpenApiConfig {
@@ -27,6 +30,15 @@ public class OpenApiConfig {
                         new SecurityScheme()
                                 .type(SecurityScheme.Type.APIKEY)
                                 .in(SecurityScheme.In.HEADER)
-                                .name("X-Api-Key")));
+                                .name("X-Api-Key")))
+                // Explicit tag order — Swagger UI renders tags in the order they're declared
+                // here, regardless of controller class order: register (get an API key)
+                // before using the main Groups feature, then Webhooks, then Quarantine last.
+                .tags(List.of(
+                        new Tag().name("Integrators").description("Register and manage API access"),
+                        new Tag().name("Groups").description("Savings group lifecycle management"),
+                        new Tag().name("Webhooks").description("Inbound payment notifications"),
+                        new Tag().name("Quarantine").description("Misdirected payment handling")
+                ));
     }
 }
