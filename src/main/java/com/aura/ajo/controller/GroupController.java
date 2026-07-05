@@ -3,9 +3,11 @@ package com.aura.ajo.controller;
 import com.aura.ajo.dto.AddMemberRequest;
 import com.aura.ajo.dto.ApiResponse;
 import com.aura.ajo.dto.CreateGroupRequest;
+import com.aura.ajo.dto.GroupClosureResponse;
 import com.aura.ajo.dto.GroupHealthResponse;
 import com.aura.ajo.dto.GroupReportResponse;
 import com.aura.ajo.dto.GroupResponse;
+import com.aura.ajo.dto.KycUpdateResponse;
 import com.aura.ajo.dto.MemberResponse;
 import com.aura.ajo.dto.MemberStatementResponse;
 import com.aura.ajo.dto.PayoutResponse;
@@ -13,6 +15,8 @@ import com.aura.ajo.dto.ProvisionResponse;
 import com.aura.ajo.dto.RotationEntry;
 import com.aura.ajo.dto.TrustScoreBreakdown;
 import com.aura.ajo.dto.UpcomingDueResponse;
+import com.aura.ajo.dto.UpdateKycRequest;
+import com.aura.ajo.dto.UpdateMemberRequest;
 import com.aura.ajo.service.GroupService;
 import com.aura.ajo.service.PayoutService;
 import com.aura.ajo.service.TrustScoringService;
@@ -96,6 +100,19 @@ public class GroupController {
         return ResponseEntity.ok(ApiResponse.ok(groupService.getGroup(groupId)));
     }
 
+    /**
+     * Explicitly closes a group: marks it COMPLETED and expires every member's Nomba
+     * virtual account. Returns a closure summary with each member's final statement.
+     *
+     *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/close
+     */
+    @Operation(summary = "Close a group and expire member virtual accounts")
+    @PostMapping("/groups/{groupId}/close")
+    public ResponseEntity<ApiResponse<GroupClosureResponse>> closeGroup(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(ApiResponse.ok("Group closed", groupService.closeGroup(groupId)));
+    }
+
     // ── Members ───────────────────────────────────────────────────────────────
 
     @Operation(summary = "Add a member to a group")
@@ -112,6 +129,44 @@ public class GroupController {
     public ResponseEntity<ApiResponse<List<MemberResponse>>> getMembers(
             @PathVariable UUID groupId) {
         return ResponseEntity.ok(ApiResponse.ok(groupService.getMembers(groupId)));
+    }
+
+    /**
+     * Renames a member and/or updates their email. Contribution history, trust score,
+     * and rotation position are all preserved. If the member has a provisioned virtual
+     * account, its display name is synced to Nomba.
+     *
+     *   curl -s -X PUT localhost:8080/api/v1/groups/{groupId}/members/{memberId} \
+     *     -H 'Content-Type: application/json' \
+     *     -d '{"name":"Ada N. Obi"}'
+     */
+    @Operation(summary = "Update a member's name and/or email")
+    @PutMapping("/groups/{groupId}/members/{memberId}")
+    public ResponseEntity<ApiResponse<MemberResponse>> updateMember(
+            @PathVariable UUID groupId,
+            @PathVariable UUID memberId,
+            @Valid @RequestBody UpdateMemberRequest request) {
+        return ResponseEntity.ok(
+            ApiResponse.ok("Member updated", groupService.updateMember(groupId, memberId, request)));
+    }
+
+    /**
+     * Updates a member's KYC tier and recalculates their trust score's cold-start base.
+     * For FORMING groups, rotationAffected is true since the new score can shift rotation
+     * position at activation. For ACTIVE groups the locked rotation order never changes.
+     *
+     *   curl -s -X PUT localhost:8080/api/v1/groups/{groupId}/members/{memberId}/kyc \
+     *     -H 'Content-Type: application/json' \
+     *     -d '{"kycStatus":"VERIFIED"}'
+     */
+    @Operation(summary = "Update a member's KYC tier and recalculate trust score")
+    @PutMapping("/groups/{groupId}/members/{memberId}/kyc")
+    public ResponseEntity<ApiResponse<KycUpdateResponse>> updateMemberKyc(
+            @PathVariable UUID groupId,
+            @PathVariable UUID memberId,
+            @Valid @RequestBody UpdateKycRequest request) {
+        return ResponseEntity.ok(
+            ApiResponse.ok("KYC tier updated", groupService.updateMemberKyc(groupId, memberId, request)));
     }
 
     // ── Provisioning ──────────────────────────────────────────────────────────
