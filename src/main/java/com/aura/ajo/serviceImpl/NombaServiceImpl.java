@@ -9,6 +9,8 @@ import com.aura.ajo.dto.NombaCreateVirtualAccountRequest;
 import com.aura.ajo.dto.NombaCreateVirtualAccountResponse;
 import com.aura.ajo.dto.NombaTokenRequest;
 import com.aura.ajo.dto.NombaTokenResponse;
+import com.aura.ajo.dto.NombaUpdateVirtualAccountRequest;
+import com.aura.ajo.dto.NombaUpdateVirtualAccountResponse;
 import com.aura.ajo.dto.NombaWalletTransferRequest;
 import com.aura.ajo.dto.NombaWalletTransferResponse;
 import com.aura.ajo.exception.AppException;
@@ -142,6 +144,27 @@ public class NombaServiceImpl implements NombaService {
         } catch (RestClientException e) {
             throw new AppException("NOMBA_EXPIRE_VA_ERROR",
                     "Nomba expireVirtualAccount HTTP error: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
+        }
+    }
+
+    @Override
+    public NombaUpdateVirtualAccountResponse updateVirtualAccount(String accountRef, NombaUpdateVirtualAccountRequest request) {
+        try {
+            NombaUpdateVirtualAccountResponse resp = restClient.put()
+                    .uri("/v1/accounts/virtual/{accountRef}", accountRef)
+                    .header("Authorization", "Bearer " + getValidToken())
+                    .header("accountId", properties.getApi().getAccountId())
+                    .body(request)
+                    .retrieve()
+                    .body(NombaUpdateVirtualAccountResponse.class);
+            if (resp == null) {
+                throw new AppException("NOMBA_NULL_RESPONSE",
+                        "Nomba returned empty body for updateVirtualAccount", HttpStatus.BAD_GATEWAY);
+            }
+            return resp;
+        } catch (RestClientException e) {
+            throw new AppException("NOMBA_UPDATE_VA_ERROR",
+                    "Nomba updateVirtualAccount HTTP error: " + e.getMessage(), HttpStatus.BAD_GATEWAY);
         }
     }
 
