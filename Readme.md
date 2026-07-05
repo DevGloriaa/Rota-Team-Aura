@@ -107,6 +107,7 @@ curl -X POST https://your-rota-url/api/v1/groups/{groupId}/activate \
 **Honest about limits.** Rota cannot recover funds from someone who collected and walked away — no software can. What Rota does: make default structurally harder, detect it instantly, record it as a tracked debt, and ensure the defaulter's trust score follows them across every future group on the network.
 
 ---
+Webhook security. Every inbound Nomba webhook is verified using HMAC-SHA256 signature verification before any processing occurs. The nomba-signature header is checked against a computed digest of the 9-field signing input. A forged webhook gets an instant 401 — real money must move before the ledger updates.
 
 ## API Reference
 
@@ -126,6 +127,9 @@ https://barrable-jesica-judgmental.ngrok-free.dev/swagger-ui.html
 | POST | `/api/v1/groups/{id}/activate` | Lock rotation and start the cycle |
 | GET | `/api/v1/groups/{id}/upcoming-dues` | See who owes, and when |
 | POST | `/webhooks/nomba` | Nomba inbound webhook receiver (signature-verified) |
+| PUT | /api/v1/groups/{id}/members/{memberId} | Update member name/email (syncs to Nomba) |
+| POST | /api/v1/groups/{id}/close | Close group and expire virtual accounts |
+| PUT | /api/v1/groups/{id}/members/{memberId}/kyc | Update KYC tier and recalculate trust score |
 
 All endpoints except `/api/v1/integrators/register` and `/webhooks/nomba` require `X-Api-Key` header.
 
@@ -136,7 +140,7 @@ All endpoints except `/api/v1/integrators/register` and `/webhooks/nomba` requir
 - **Java 17** + **Spring Boot 4.x**
 - **Spring Data JPA** + **PostgreSQL**
 - **Spring Security** (API key authentication)
-- **Nomba Sandbox API** — Virtual Accounts, Transfers, Webhooks, Transactions
+- **Nomba LIVE API** — Virtual Accounts, Transfers, Webhooks, Transactions
 - **springdoc-openapi** — auto-generated Swagger UI
 
 ---
