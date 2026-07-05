@@ -20,7 +20,14 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Rota API")
-                        .description("Rotating savings infrastructure — dedicated virtual accounts and automated group savings for any platform built on Nomba")
+                        .description("Rotating savings infrastructure — dedicated virtual accounts and " +
+                                "automated group savings for any platform built on Nomba.\n\n" +
+                                "## Quick Start\n" +
+                                "1. **Register** → `POST /api/v1/integrators/register` with `{\"name\": \"Your App\"}` — no key needed\n" +
+                                "2. **Copy your API key** from the response (shown once only)\n" +
+                                "3. **Click Authorize** (top right) → paste your key → click Authorize\n" +
+                                "4. All endpoints are now unlocked — start with `POST /api/v1/groups` to create a savings group\n\n" +
+                                "Built on Nomba Virtual Accounts, Webhooks, and Transfers APIs.")
                         .version("1.0.0")
                         .contact(new Contact()
                                 .name("Team Aura")
