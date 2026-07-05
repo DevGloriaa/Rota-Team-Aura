@@ -2,20 +2,26 @@ package com.aura.ajo.serviceImpl;
 
 import com.aura.ajo.dto.AddMemberRequest;
 import com.aura.ajo.dto.CreateGroupRequest;
+import com.aura.ajo.dto.GroupClosureResponse;
 import com.aura.ajo.dto.GroupHealthResponse;
 import com.aura.ajo.dto.GroupReportResponse;
 import com.aura.ajo.dto.GroupResponse;
+import com.aura.ajo.dto.KycUpdateResponse;
 import com.aura.ajo.dto.MemberResponse;
 import com.aura.ajo.dto.MemberStatementResponse;
 import com.aura.ajo.dto.NombaBankResolveRequest;
 import com.aura.ajo.dto.NombaBankResolveResponse;
 import com.aura.ajo.dto.NombaCreateVirtualAccountRequest;
 import com.aura.ajo.dto.NombaCreateVirtualAccountResponse;
+import com.aura.ajo.dto.NombaUpdateVirtualAccountRequest;
+import com.aura.ajo.dto.NombaUpdateVirtualAccountResponse;
 import com.aura.ajo.dto.PayoutResponse;
 import com.aura.ajo.dto.ProvisionResponse;
 import com.aura.ajo.dto.RotationEntry;
 import com.aura.ajo.dto.SimulateContributionRequest;
 import com.aura.ajo.dto.UpcomingDueResponse;
+import com.aura.ajo.dto.UpdateKycRequest;
+import com.aura.ajo.dto.UpdateMemberRequest;
 import com.aura.ajo.dto.VirtualAccountResponse;
 import com.aura.ajo.entity.*;
 import com.aura.ajo.enums.*;
@@ -24,6 +30,7 @@ import com.aura.ajo.repository.*;
 import com.aura.ajo.service.GroupService;
 import com.aura.ajo.service.NombaService;
 import com.aura.ajo.service.PayoutService;
+import com.aura.ajo.service.TrustScoringService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -52,6 +59,7 @@ public class GroupServiceImpl implements GroupService {
     private final ContributionRepository contributionRepository;
     private final NombaService nombaService;
     private final PayoutService payoutService;
+    private final TrustScoringService trustScoringService;
 
     // -------------------------------------------------------------------------
     // Group lifecycle
@@ -677,6 +685,121 @@ public class GroupServiceImpl implements GroupService {
             .rotationOrder(rotationOrder)
             .nextToCollectMemberId(nextRecipient != null ? nextRecipient.getId() : null)
             .nextToCollectMemberName(nextRecipient != null ? nextRecipient.getName() : null)
+            .build();
+    }
+
+    // ── Member rename ──────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public MemberResponse updateMember(UUID groupId, UUID memberId, UpdateMemberRequest request) {
+        SavingsGroup group = findGroupOrThrow(groupId);
+        Member member = memberRepository.findById(memberId)
+            .filter(m -> m.getGroup().getId().equals(group.getId()))
+            .orElseThrow(() -> AppException.notFound("Member", memberId));
+
+        boolean nameChanged = false;
+        if (request.getName() != null && !request.getName().isBlank()
+                && !request.getName().equals(member.getName())) {
+            member.setName(request.getName());
+            nameChanged = true;
+        }
+        if (request.getEmail() != null && !request.getEmail().isBlank()
+                && !request.getEmail().equalsIgnoreCase(member.getEmail())) {
+            if (memberRepository.existsByGroupAndEmailAndIdNot(group, request.getEmail(), memberId)) {
+                throw AppException.conflict("DUPLICATE_MEMBER",
+                    "A member with email " + request.getEmail() + " already exists in this group");
+            }
+            member.setEmail(request.getEmail());
+        }
+
+        member = memberRepository.save(member);
+
+        VirtualAccount va = virtualAccountRepository
+            .findByMemberAndType(member, VirtualAccountType.MEMBER)
+            .orElse(null);
+
+        // Keep Nomba's virtual account display name in sync with the new name.
+        if (nameChanged && va != null) {
+            String accountName = toNombaAccountName("Nomba/" + member.getName());
+            NombaUpdateVirtualAccountResponse resp = nombaService.updateVirtualAccount(
+                va.getAccountRef(),
+                NombaUpdateVirtualAccountRequest.builder().accountName(accountName).build());
+            assertNombaSuccess(resp.getCode(), "updateVirtualAccount(member=" + memberId + ")");
+        }
+
+        log.info("Updated member {} in group {} (nameChanged={})", memberId, groupId, nameChanged);
+        return toMemberResponse(member, va);
+    }
+
+    // ── Group closure ──────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public GroupClosureResponse closeGroup(UUID groupId) {
+        SavingsGroup group = findGroupOrThrow(groupId);
+
+        if (group.getStatus() == GroupStatus.COMPLETED) {
+            throw AppException.conflict("GROUP_ALREADY_CLOSED", "Group " + groupId + " is already closed");
+        }
+
+        List<Member> members = memberRepository.findByGroupOrderByCreatedAtAsc(group);
+        List<MemberStatementResponse> statements = new ArrayList<>();
+
+        for (Member member : members) {
+            virtualAccountRepository.findByMemberAndType(member, VirtualAccountType.MEMBER)
+                .ifPresent(va -> nombaService.expireVirtualAccount(va.getAccountRef()));
+            statements.add(getMemberStatement(groupId, member.getId()));
+        }
+
+        BigDecimal finalPoolBalance = computePoolBalance(group);
+
+        group.setStatus(GroupStatus.COMPLETED);
+        group = groupRepository.save(group);
+
+        log.info("Closed group {} — {} member virtual accounts expired", groupId, members.size());
+
+        return GroupClosureResponse.builder()
+            .groupId(group.getId())
+            .groupName(group.getName())
+            .status(group.getStatus().name())
+            .finalCycle(group.getCurrentCycle())
+            .finalPoolBalance(finalPoolBalance)
+            .memberStatements(statements)
+            .build();
+    }
+
+    // ── KYC tier change ────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public KycUpdateResponse updateMemberKyc(UUID groupId, UUID memberId, UpdateKycRequest request) {
+        SavingsGroup group = findGroupOrThrow(groupId);
+        Member member = memberRepository.findById(memberId)
+            .filter(m -> m.getGroup().getId().equals(group.getId()))
+            .orElseThrow(() -> AppException.notFound("Member", memberId));
+
+        member.setKycStatus(request.getKycStatus());
+        memberRepository.save(member);
+
+        // Recalculates the cold-start base (from the new KYC tier) plus the rest of the
+        // score formula; never touches rotationPosition — see TrustScoringService javadoc.
+        trustScoringService.recalculateTrustScore(member);
+
+        // FORMING: rotation isn't locked yet, so the new score can shift position at
+        // activation. ACTIVE/COMPLETED: rotation order is immutable once locked.
+        boolean rotationAffected = group.getStatus() == GroupStatus.FORMING;
+
+        VirtualAccount va = virtualAccountRepository
+            .findByMemberAndType(member, VirtualAccountType.MEMBER)
+            .orElse(null);
+
+        log.info("Updated KYC tier for member={} to {} (rotationAffected={})",
+            memberId, request.getKycStatus(), rotationAffected);
+
+        return KycUpdateResponse.builder()
+            .member(toMemberResponse(member, va))
+            .rotationAffected(rotationAffected)
             .build();
     }
 
