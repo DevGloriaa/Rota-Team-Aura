@@ -6,6 +6,8 @@ import com.aura.ajo.dto.NombaBankTransferRequest;
 import com.aura.ajo.dto.NombaBankTransferResponse;
 import com.aura.ajo.dto.NombaCreateVirtualAccountRequest;
 import com.aura.ajo.dto.NombaCreateVirtualAccountResponse;
+import com.aura.ajo.dto.NombaUpdateVirtualAccountRequest;
+import com.aura.ajo.dto.NombaUpdateVirtualAccountResponse;
 import com.aura.ajo.dto.NombaWalletTransferRequest;
 import com.aura.ajo.dto.NombaWalletTransferResponse;
 
@@ -48,4 +50,11 @@ public interface NombaService {
      * Expires (deactivates) a previously created virtual account.
      */
     void expireVirtualAccount(String accountRef);
+
+    /**
+     * PUT /v1/accounts/virtual/{accountRef}
+     * Updates a previously created virtual account's display name — called after a
+     * member rename so Nomba's records stay in sync with ours.
+     */
+    NombaUpdateVirtualAccountResponse updateVirtualAccount(String accountRef, NombaUpdateVirtualAccountRequest request);
 }
