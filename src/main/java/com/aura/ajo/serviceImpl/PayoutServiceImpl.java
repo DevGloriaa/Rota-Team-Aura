@@ -227,7 +227,12 @@ public class PayoutServiceImpl implements PayoutService {
                 .build();
 
         NombaBankTransferResponse transferResp = nombaService.performBankTransfer(transferReq);
-        if (!"00".equals(transferResp.getCode()) && !transferResp.isStatus()) {
+        // Nomba is inconsistent across endpoints: some return code "00", the live
+        // /v2/transfers/bank endpoint returns code "200" with status=true.
+        boolean transferSucceeded = "00".equals(transferResp.getCode())
+                || "200".equals(transferResp.getCode())
+                || transferResp.isStatus();
+        if (!transferSucceeded) {
             throw new AppException("NOMBA_ERROR",
                     "Nomba returned non-success code " + transferResp.getCode() + " for: performBankTransfer(group="
                             + groupId + ",cycle=" + cycleNumber + ")",
