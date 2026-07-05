@@ -18,6 +18,9 @@ public interface MemberRepository extends JpaRepository<Member, UUID> {
 
     boolean existsByGroupAndEmail(SavingsGroup group, String email);
 
+    /** Uniqueness check on rename — excludes the member being updated. */
+    boolean existsByGroupAndEmailAndIdNot(SavingsGroup group, String email, UUID id);
+
     long countByGroup(SavingsGroup group);
 
     /** Cross-group completed-cycle count — used for experience bonus in trust scoring. */
