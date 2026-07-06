@@ -1,12 +1,16 @@
 package com.aura.ajo.controller;
 
+import com.aura.ajo.exception.ErrorResponse;
 import com.aura.ajo.service.WebhookService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
 
 /**
  * Receives inbound webhooks from Nomba.
@@ -35,10 +39,18 @@ public class WebhookController {
 
     @Operation(summary = "Nomba inbound payment webhook receiver")
     @PostMapping("/nomba")
-    public ResponseEntity<Void> handleNomba(
+    public ResponseEntity<?> handleNomba(
             @RequestHeader(value = "nomba-signature", required = false) String signature,
             @RequestHeader(value = "nomba-timestamp", required = false) String nombaTimestamp,
-            @RequestBody String rawPayload) {
+            @RequestBody(required = false) String rawPayload) {
+
+        if (rawPayload == null || rawPayload.isBlank()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ErrorResponse.builder()
+                    .errorCode("INVALID_REQUEST")
+                    .message("Empty payload")
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        }
 
         log.debug("Received Nomba webhook ({} bytes)", rawPayload.length());
         webhookService.handleNombaWebhook(rawPayload, signature != null ? signature : "",
