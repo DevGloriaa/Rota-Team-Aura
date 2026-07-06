@@ -38,6 +38,10 @@ import java.util.UUID;
  *
  * Base path: /api/v1
  *
+ * Methods are ordered to match the demo flow (create → add members → provision →
+ * activate → lookups/reporting → payouts → closure → updates), since springdoc
+ * renders Swagger UI operations in declaration order.
+ *
  * curl examples:
  *
  *   # Create group
@@ -77,7 +81,7 @@ public class GroupController {
     private final PayoutService payoutService;
     private final TrustScoringService trustScoringService;
 
-    // ── Groups ────────────────────────────────────────────────────────────────
+    // ── 1. Create group ──────────────────────────────────────────────────────
 
     @Operation(summary = "Create a savings group")
     @PostMapping("/groups")
@@ -87,33 +91,7 @@ public class GroupController {
             .body(ApiResponse.ok("Group created", groupService.createGroup(request)));
     }
 
-    @Operation(summary = "List your groups")
-    @GetMapping("/groups")
-    public ResponseEntity<ApiResponse<List<GroupResponse>>> listGroups() {
-        return ResponseEntity.ok(ApiResponse.ok(groupService.listGroups()));
-    }
-
-    @Operation(summary = "Get group details")
-    @GetMapping("/groups/{groupId}")
-    public ResponseEntity<ApiResponse<GroupResponse>> getGroup(
-            @PathVariable UUID groupId) {
-        return ResponseEntity.ok(ApiResponse.ok(groupService.getGroup(groupId)));
-    }
-
-    /**
-     * Explicitly closes a group: marks it COMPLETED and expires every member's Nomba
-     * virtual account. Returns a closure summary with each member's final statement.
-     *
-     *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/close
-     */
-    @Operation(summary = "Close a group and expire member virtual accounts")
-    @PostMapping("/groups/{groupId}/close")
-    public ResponseEntity<ApiResponse<GroupClosureResponse>> closeGroup(
-            @PathVariable UUID groupId) {
-        return ResponseEntity.ok(ApiResponse.ok("Group closed", groupService.closeGroup(groupId)));
-    }
-
-    // ── Members ───────────────────────────────────────────────────────────────
+    // ── 2-3. Members: add + list ─────────────────────────────────────────────
 
     @Operation(summary = "Add a member to a group")
     @PostMapping("/groups/{groupId}/members")
@@ -130,6 +108,153 @@ public class GroupController {
             @PathVariable UUID groupId) {
         return ResponseEntity.ok(ApiResponse.ok(groupService.getMembers(groupId)));
     }
+
+    // ── 4. Provisioning ───────────────────────────────────────────────────────
+
+    @Operation(summary = "Provision Nomba virtual accounts for all members")
+    @PostMapping("/groups/{groupId}/provision")
+    public ResponseEntity<ApiResponse<ProvisionResponse>> provision(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(
+            ApiResponse.ok("Virtual accounts provisioned", groupService.provisionVirtualAccounts(groupId)));
+    }
+
+    // ── 5. Activation ─────────────────────────────────────────────────────────
+
+    @Operation(summary = "Activate group and lock rotation")
+    @PostMapping("/groups/{groupId}/activate")
+    public ResponseEntity<ApiResponse<GroupResponse>> activate(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(
+            ApiResponse.ok("Group activated and rotation locked", groupService.activateGroup(groupId)));
+    }
+
+    // ── 6-7. Group lookup ─────────────────────────────────────────────────────
+
+    @Operation(summary = "Get group details")
+    @GetMapping("/groups/{groupId}")
+    public ResponseEntity<ApiResponse<GroupResponse>> getGroup(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(ApiResponse.ok(groupService.getGroup(groupId)));
+    }
+
+    @Operation(summary = "List your groups")
+    @GetMapping("/groups")
+    public ResponseEntity<ApiResponse<List<GroupResponse>>> listGroups() {
+        return ResponseEntity.ok(ApiResponse.ok(groupService.listGroups()));
+    }
+
+    // ── 8. Events / upcoming dues ─────────────────────────────────────────────
+
+    /**
+     * Returns all non-PAID contributions whose periodEnd is on or after today,
+     * ordered by deadline ascending. Use this to drive reminder UI and push alerts.
+     * daysUntilDue is negative for overdue contributions still awaiting payout.
+     *
+     *   curl -s localhost:8080/api/v1/groups/{groupId}/upcoming-dues
+     */
+    @Operation(summary = "Get upcoming contribution deadlines")
+    @GetMapping("/groups/{groupId}/upcoming-dues")
+    public ResponseEntity<ApiResponse<UpcomingDueResponse>> getUpcomingDues(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(ApiResponse.ok(groupService.getUpcomingDues(groupId)));
+    }
+
+    // ── 9. Member statement ───────────────────────────────────────────────────
+
+    /**
+     * Full contribution history and standing for one member: every cycle's expected vs
+     * received amount and status, rotation position, hasCollected, trustScore, owedAmount.
+     *
+     *   curl -s localhost:8080/api/v1/groups/{groupId}/members/{memberId}/statement
+     */
+    @Operation(summary = "Get a member's contribution statement")
+    @GetMapping("/groups/{groupId}/members/{memberId}/statement")
+    public ResponseEntity<ApiResponse<MemberStatementResponse>> getMemberStatement(
+            @PathVariable UUID groupId,
+            @PathVariable UUID memberId) {
+        return ResponseEntity.ok(ApiResponse.ok(groupService.getMemberStatement(groupId, memberId)));
+    }
+
+    // ── 10. Group report ──────────────────────────────────────────────────────
+
+    /**
+     * Group-level report: status, current cycle, pool balance, per-member funding status
+     * for the current cycle, full payout history, and rotation order (who collects next).
+     *
+     *   curl -s localhost:8080/api/v1/groups/{groupId}/report
+     */
+    @Operation(summary = "Get group funding status and payout history")
+    @GetMapping("/groups/{groupId}/report")
+    public ResponseEntity<ApiResponse<GroupReportResponse>> getGroupReport(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(ApiResponse.ok(groupService.getGroupReport(groupId)));
+    }
+
+    // ── 11. Ledger ────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Get pool balance for a group")
+    @GetMapping("/groups/{groupId}/balance")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getPoolBalance(
+            @PathVariable UUID groupId) {
+        BigDecimal balance = groupService.getPoolBalance(groupId);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "groupId", groupId,
+            "poolBalance", balance
+        )));
+    }
+
+    // ── 12-13. Payouts ────────────────────────────────────────────────────────
+
+    /**
+     * Returns all executed payouts for a group in cycle order.
+     * Also readable in conjunction with GET /rotation to see who collects next.
+     *
+     *   curl -s localhost:8080/api/v1/groups/{groupId}/payouts
+     */
+    @Operation(summary = "List payout history for a group")
+    @GetMapping("/groups/{groupId}/payouts")
+    public ResponseEntity<ApiResponse<List<PayoutResponse>>> getPayouts(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(ApiResponse.ok(payoutService.getPayoutHistory(groupId)));
+    }
+
+    /**
+     * Manually triggers the payout for a specific cycle. Use after funding all
+     * contributions via simulate-contribution (or live webhooks) to test the payout path.
+     * Throws 409 if the payout was already executed for this cycle.
+     *
+     *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/cycles/1/trigger-payout
+     */
+    @Operation(summary = "Manually trigger payout for a cycle")
+    @PostMapping("/groups/{groupId}/cycles/{cycleNumber}/trigger-payout")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> triggerPayout(
+            @PathVariable UUID groupId,
+            @PathVariable int cycleNumber) {
+        payoutService.triggerPayoutForCycle(groupId, cycleNumber);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+            "groupId", groupId,
+            "cycleNumber", cycleNumber,
+            "message", "Payout executed"
+        )));
+    }
+
+    // ── 14. Closure ───────────────────────────────────────────────────────────
+
+    /**
+     * Explicitly closes a group: marks it COMPLETED and expires every member's Nomba
+     * virtual account. Returns a closure summary with each member's final statement.
+     *
+     *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/close
+     */
+    @Operation(summary = "Close a group and expire member virtual accounts")
+    @PostMapping("/groups/{groupId}/close")
+    public ResponseEntity<ApiResponse<GroupClosureResponse>> closeGroup(
+            @PathVariable UUID groupId) {
+        return ResponseEntity.ok(ApiResponse.ok("Group closed", groupService.closeGroup(groupId)));
+    }
+
+    // ── 15-16. Member updates ─────────────────────────────────────────────────
 
     /**
      * Renames a member and/or updates their email. Contribution history, trust score,
@@ -169,25 +294,7 @@ public class GroupController {
             ApiResponse.ok("KYC tier updated", groupService.updateMemberKyc(groupId, memberId, request)));
     }
 
-    // ── Provisioning ──────────────────────────────────────────────────────────
-
-    @Operation(summary = "Provision Nomba virtual accounts for all members")
-    @PostMapping("/groups/{groupId}/provision")
-    public ResponseEntity<ApiResponse<ProvisionResponse>> provision(
-            @PathVariable UUID groupId) {
-        return ResponseEntity.ok(
-            ApiResponse.ok("Virtual accounts provisioned", groupService.provisionVirtualAccounts(groupId)));
-    }
-
-    // ── Activation ────────────────────────────────────────────────────────────
-
-    @Operation(summary = "Activate group and lock rotation")
-    @PostMapping("/groups/{groupId}/activate")
-    public ResponseEntity<ApiResponse<GroupResponse>> activate(
-            @PathVariable UUID groupId) {
-        return ResponseEntity.ok(
-            ApiResponse.ok("Group activated and rotation locked", groupService.activateGroup(groupId)));
-    }
+    // ── Rotation / health / trust score (not part of the requested ordering) ──
 
     @Operation(summary = "Get the locked rotation order")
     @GetMapping("/groups/{groupId}/rotation")
@@ -195,101 +302,6 @@ public class GroupController {
             @PathVariable UUID groupId) {
         return ResponseEntity.ok(ApiResponse.ok(groupService.getRotation(groupId)));
     }
-
-    // ── Ledger ────────────────────────────────────────────────────────────────
-
-    @Operation(summary = "Get pool balance for a group")
-    @GetMapping("/groups/{groupId}/balance")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> getPoolBalance(
-            @PathVariable UUID groupId) {
-        BigDecimal balance = groupService.getPoolBalance(groupId);
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "groupId", groupId,
-            "poolBalance", balance
-        )));
-    }
-
-    // ── Payouts ───────────────────────────────────────────────────────────────
-
-    /**
-     * Returns all executed payouts for a group in cycle order.
-     * Also readable in conjunction with GET /rotation to see who collects next.
-     *
-     *   curl -s localhost:8080/api/v1/groups/{groupId}/payouts
-     */
-    @Operation(summary = "List payout history for a group")
-    @GetMapping("/groups/{groupId}/payouts")
-    public ResponseEntity<ApiResponse<List<PayoutResponse>>> getPayouts(
-            @PathVariable UUID groupId) {
-        return ResponseEntity.ok(ApiResponse.ok(payoutService.getPayoutHistory(groupId)));
-    }
-
-    /**
-     * Manually triggers the payout for a specific cycle. Use after funding all
-     * contributions via simulate-contribution (or live webhooks) to test the payout path.
-     * Throws 409 if the payout was already executed for this cycle.
-     *
-     *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/cycles/1/trigger-payout
-     */
-    @Operation(summary = "Manually trigger payout for a cycle")
-    @PostMapping("/groups/{groupId}/cycles/{cycleNumber}/trigger-payout")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> triggerPayout(
-            @PathVariable UUID groupId,
-            @PathVariable int cycleNumber) {
-        payoutService.triggerPayoutForCycle(groupId, cycleNumber);
-        return ResponseEntity.ok(ApiResponse.ok(Map.of(
-            "groupId", groupId,
-            "cycleNumber", cycleNumber,
-            "message", "Payout executed"
-        )));
-    }
-
-    // ── Events / upcoming dues ────────────────────────────────────────────────
-
-    /**
-     * Returns all non-PAID contributions whose periodEnd is on or after today,
-     * ordered by deadline ascending. Use this to drive reminder UI and push alerts.
-     * daysUntilDue is negative for overdue contributions still awaiting payout.
-     *
-     *   curl -s localhost:8080/api/v1/groups/{groupId}/upcoming-dues
-     */
-    @Operation(summary = "Get upcoming contribution deadlines")
-    @GetMapping("/groups/{groupId}/upcoming-dues")
-    public ResponseEntity<ApiResponse<UpcomingDueResponse>> getUpcomingDues(
-            @PathVariable UUID groupId) {
-        return ResponseEntity.ok(ApiResponse.ok(groupService.getUpcomingDues(groupId)));
-    }
-
-    // ── Statement + reporting ─────────────────────────────────────────────────
-
-    /**
-     * Full contribution history and standing for one member: every cycle's expected vs
-     * received amount and status, rotation position, hasCollected, trustScore, owedAmount.
-     *
-     *   curl -s localhost:8080/api/v1/groups/{groupId}/members/{memberId}/statement
-     */
-    @Operation(summary = "Get a member's contribution statement")
-    @GetMapping("/groups/{groupId}/members/{memberId}/statement")
-    public ResponseEntity<ApiResponse<MemberStatementResponse>> getMemberStatement(
-            @PathVariable UUID groupId,
-            @PathVariable UUID memberId) {
-        return ResponseEntity.ok(ApiResponse.ok(groupService.getMemberStatement(groupId, memberId)));
-    }
-
-    /**
-     * Group-level report: status, current cycle, pool balance, per-member funding status
-     * for the current cycle, full payout history, and rotation order (who collects next).
-     *
-     *   curl -s localhost:8080/api/v1/groups/{groupId}/report
-     */
-    @Operation(summary = "Get group funding status and payout history")
-    @GetMapping("/groups/{groupId}/report")
-    public ResponseEntity<ApiResponse<GroupReportResponse>> getGroupReport(
-            @PathVariable UUID groupId) {
-        return ResponseEntity.ok(ApiResponse.ok(groupService.getGroupReport(groupId)));
-    }
-
-    // ── Phase 4: Health + Trust score ─────────────────────────────────────────
 
     /**
      * Group health dashboard — shows each member's contribution status for the
