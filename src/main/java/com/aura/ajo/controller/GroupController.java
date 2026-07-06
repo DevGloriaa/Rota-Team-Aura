@@ -33,44 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Single REST controller for the rotating savings group API.
- *
- * Base path: /api/v1
- *
- * Methods are ordered to match the demo flow (create → add members → provision →
- * activate → lookups/reporting → payouts → closure → updates), since springdoc
- * renders Swagger UI operations in declaration order.
- *
- * curl examples:
- *
- *   # Create group
- *   curl -s -X POST localhost:8080/api/v1/groups \
- *     -H 'Content-Type: application/json' \
- *     -d '{"name":"Circle A","contributionAmount":10000,"frequency":"MONTHLY"}'
- *
- *   # Add member  (replace {groupId})
- *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/members \
- *     -H 'Content-Type: application/json' \
- *     -d '{"name":"Ada Obi","email":"ada@example.com","trustScore":80}'
- *
- *   # Provision virtual accounts
- *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/provision
- *
- *   # Activate (locks rotation)
- *   curl -s -X POST localhost:8080/api/v1/groups/{groupId}/activate
- *
- *   # View trust-ordered rotation
- *   curl -s localhost:8080/api/v1/groups/{groupId}/rotation
- *
- *   # Pool balance
- *   curl -s localhost:8080/api/v1/groups/{groupId}/balance
- *
- *   # Simulate a contribution (dev only — supply same requestId twice to test idempotency)
- *   curl -s -X POST localhost:8080/api/v1/test/simulate-contribution \
- *     -H 'Content-Type: application/json' \
- *     -d '{"groupId":"{groupId}","memberId":"{memberId}","amount":10000,"requestId":"test-req-1"}'
- */
+
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
