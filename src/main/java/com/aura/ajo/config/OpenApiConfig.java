@@ -2,11 +2,13 @@ package com.aura.ajo.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Paths;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.tags.Tag;
+import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -47,5 +49,54 @@ public class OpenApiConfig {
                         new Tag().name("Webhooks").description("Inbound payment notifications"),
                         new Tag().name("Quarantine").description("Misdirected payment handling")
                 ));
+    }
+
+    /**
+     * Spring's handler-mapping registry does not preserve controller method declaration
+     * order (confirmed against the live /api-docs output — paths came back interleaved
+     * across controllers, not in source order), so springdoc.swagger-ui.operations-sorter=none
+     * alone isn't enough: it stops Swagger UI from re-sorting, but the order it receives
+     * from the server was already unordered. This customizer rebuilds the paths map in the
+     * exact sequence the demo flow expects; anything not explicitly listed keeps its
+     * existing relative order, appended at the end.
+     *
+     * Caveat: where two HTTP methods share one path ("/api/v1/groups" and
+     * ".../groups/{groupId}/members"), swagger-core's PathItem model has a fixed
+     * get/put/post/delete/... field order that always renders GET above POST for that path
+     * — no path-level customizer can change the method order *within* a single path entry.
+     */
+    @Bean
+    public OpenApiCustomizer groupsPathOrderCustomizer() {
+        List<String> desiredOrder = List.of(
+                "/api/v1/groups",
+                "/api/v1/groups/{groupId}/members",
+                "/api/v1/groups/{groupId}/provision",
+                "/api/v1/groups/{groupId}/activate",
+                "/api/v1/groups/{groupId}",
+                "/api/v1/groups/{groupId}/upcoming-dues",
+                "/api/v1/groups/{groupId}/members/{memberId}/statement",
+                "/api/v1/groups/{groupId}/report",
+                "/api/v1/groups/{groupId}/balance",
+                "/api/v1/groups/{groupId}/payouts",
+                "/api/v1/groups/{groupId}/cycles/{cycleNumber}/trigger-payout",
+                "/api/v1/groups/{groupId}/close",
+                "/api/v1/groups/{groupId}/members/{memberId}",
+                "/api/v1/groups/{groupId}/members/{memberId}/kyc"
+        );
+
+        return openApi -> {
+            Paths original = openApi.getPaths();
+            if (original == null) {
+                return;
+            }
+            Paths ordered = new Paths();
+            for (String path : desiredOrder) {
+                if (original.containsKey(path)) {
+                    ordered.addPathItem(path, original.remove(path));
+                }
+            }
+            original.forEach(ordered::addPathItem);
+            openApi.setPaths(ordered);
+        };
     }
 }
