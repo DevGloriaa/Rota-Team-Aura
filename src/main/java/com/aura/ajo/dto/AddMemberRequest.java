@@ -9,17 +9,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class AddMemberRequest {
 
-    @Schema(description = "Member's full name.", example = "Ada Okafor")
+    @Schema(description = "Member's full name.")
     @NotBlank
     @Size(min = 2, max = 100)
     private String name;
 
-    @Schema(description = "Member's email address, used for identification.", example = "ada@example.com")
+    @Schema(description = "Member's email address, used for identification.")
     @NotBlank
     @Email
     private String email;
 
-    @Schema(required = false, description = "Optional. Member's phone number.", example = "08012345678")
+    @Schema(required = false, description = "Optional. Member's phone number.")
     private String phone;
 
     @Schema(hidden = true)
@@ -30,11 +30,11 @@ public class AddMemberRequest {
     @Schema(hidden = true)
     private String nombaAccountId;
 
-    @Schema(description = "Nigerian bank account number for receiving payouts — verified against Nomba at registration.", example = "2190025748")
+    @Schema(description = "Nigerian bank account number for receiving payouts — verified against Nomba at registration.")
     @NotBlank
     private String payoutAccountNumber;
 
-    @Schema(description = "CBN bank code, e.g. \"058\" for GTBank, \"044\" for Access.", example = "058")
+    @Schema(description = "CBN bank code, e.g. \"058\" for GTBank, \"044\" for Access.")
     @NotBlank
     private String payoutBankCode;
 }
