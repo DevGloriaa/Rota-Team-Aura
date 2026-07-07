@@ -24,11 +24,30 @@ public class OpenApiConfig {
                         .title("Rota API")
                         .description("Rotating savings infrastructure — dedicated virtual accounts and " +
                                 "automated group savings for any platform built on Nomba.\n\n" +
+                                "## Live API Notice\n" +
+                                "This API runs on **live Nomba infrastructure**. All virtual accounts provisioned " +
+                                "are real bank accounts. All payouts move real money.\n\n" +
+                                "**Testing tip**: Use small amounts (₦100 – ₦500) when testing " +
+                                "contribution flows. Real money moves on this API.\n\n" +
+                                "## Requirements\n" +
+                                "- **Payout account number**: must be a real, valid Nigerian bank account number\n" +
+                                "- **Bank code**: must be a valid CBN bank code\n" +
+                                "- **Email**: used for member identification\n\n" +
                                 "## Quick Start\n" +
                                 "1. **Register** → `POST /api/v1/integrators/register` with `{\"name\": \"Your App\"}` — no key needed\n" +
                                 "2. **Copy your API key** from the response (shown once only)\n" +
                                 "3. **Click Authorize** (top right) → paste your key → click Authorize\n" +
                                 "4. All endpoints are now unlocked — start with `POST /api/v1/groups` to create a savings group\n\n" +
+                                "## Bank Codes Reference\n" +
+                                "| Bank | Code |\n" +
+                                "|------|------|\n" +
+                                "| UBA | 033 |\n" +
+                                "| GTBank | 058 |\n" +
+                                "| Access Bank | 044 |\n" +
+                                "| Zenith Bank | 057 |\n" +
+                                "| First Bank | 011 |\n" +
+                                "| OPay | 999992 |\n" +
+                                "| Kuda | 090267 |\n\n" +
                                 "Built on Nomba Virtual Accounts, Webhooks, and Transfers APIs.")
                         .version("1.0.0")
                         .contact(new Contact()
