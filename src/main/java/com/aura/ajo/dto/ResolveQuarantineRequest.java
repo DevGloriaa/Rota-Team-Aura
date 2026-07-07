@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ResolveQuarantineRequest {
 
-    @Schema(description = "Free-text note explaining how this misdirected payment was resolved.", example = "Refunded manually to sender; not applied to any group.")
+    @Schema(description = "Free-text note explaining how this misdirected payment was resolved.")
     @NotBlank
     private String resolutionNote;
 }
