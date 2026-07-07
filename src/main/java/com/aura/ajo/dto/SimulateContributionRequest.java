@@ -26,7 +26,7 @@ public class SimulateContributionRequest {
     @NotNull
     private UUID memberId;
 
-    @Schema(description = "Amount to simulate as paid in.", example = "5000")
+    @Schema(description = "Amount to simulate as paid in.")
     @NotNull
     @Positive
     private BigDecimal amount;
