@@ -1,5 +1,6 @@
 package com.aura.ajo.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
@@ -17,19 +18,19 @@ import java.util.UUID;
 @NoArgsConstructor
 public class SimulateContributionRequest {
 
+    @Schema(description = "Group to credit the simulated contribution to.")
     @NotNull
     private UUID groupId;
 
+    @Schema(description = "Member the simulated contribution is attributed to.")
     @NotNull
     private UUID memberId;
 
+    @Schema(description = "Amount to simulate as paid in.", example = "5000")
     @NotNull
     @Positive
     private BigDecimal amount;
 
-    /**
-     * Optional. Supply the same value twice to exercise webhook idempotency.
-     * Auto-generated UUID if omitted.
-     */
+    @Schema(required = false, description = "Optional. Supply the same value twice to exercise webhook idempotency. Auto-generated UUID if omitted.")
     private String requestId;
 }
