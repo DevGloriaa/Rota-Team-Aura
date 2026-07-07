@@ -15,12 +15,12 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 public class CreateGroupRequest {
 
-    @Schema(description = "Name of the savings group.", example = "Sunday Thrift Circle")
+    @Schema(description = "Name of the savings group.")
     @NotBlank
     @Size(min = 2, max = 100)
     private String name;
 
-    @Schema(description = "Amount each member contributes per cycle.", example = "5000")
+    @Schema(description = "Amount each member contributes per cycle.")
     @NotNull
     @Positive
     private BigDecimal contributionAmount;
