@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class UpdateKycRequest {
 
-    @Schema(description = "New KYC tier for the member. PENDING/VERIFIED/REJECTED affects the trust score's cold-start base.", example = "VERIFIED")
+    @Schema(description = "New KYC tier for the member. PENDING/VERIFIED/REJECTED affects the trust score's cold-start base.")
     @NotNull
     private KycStatus kycStatus;
 }
