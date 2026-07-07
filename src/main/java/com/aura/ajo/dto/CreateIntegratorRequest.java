@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class CreateIntegratorRequest {
 
-    @Schema(description = "Name of your app or platform. Shown in the API key registration confirmation.", example = "Grace Chapel App")
+    @Schema(description = "Name of your app or platform. Shown in the API key registration confirmation.")
     @NotBlank
     @Size(min = 2, max = 100)
     private String name;
