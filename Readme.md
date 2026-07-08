@@ -113,7 +113,7 @@ Webhook security. Every inbound Nomba webhook is verified using HMAC-SHA256 sign
 
 Live interactive docs (try endpoints directly):
 ```
-https://barrable-jesica-judgmental.ngrok-free.dev/swagger-ui.html
+https://rota-fkk1.onrender.com/swagger-ui.html
 ```
 
 | Method | Endpoint | Description |
